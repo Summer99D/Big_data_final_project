@@ -1,0 +1,10 @@
+---
+title: "Big Data Final project"
+author: "Summer Negahdar"
+date: "2025-03-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
