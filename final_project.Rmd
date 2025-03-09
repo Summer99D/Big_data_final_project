@@ -29,6 +29,7 @@ playlist_df<- read.csv("playlist.csv")
 ##uploading spotify songs dataset
 song_df<- read_csv('spotify_songs.csv')
 ```
+
 ```{r}
 ### playlist df
 ##just looking at statistical
@@ -46,7 +47,7 @@ ggplot(playlist_df) +
   geom_boxplot(aes(x = "number of tracks", y = num_tracks), width = 0.2) +
   labs(title = "Boxplots of num_samples and num_tracks", x = "Category", y = "Values") +
   theme_minimal() +
-  theme(axis.text.x = element_text((hjust = 1))
+  theme(axis.text.x = element_text(hjust = 1))
 ```
 there is a large number of variables where the number of samples is too small. we don't want that so we create a subset where number of samples is mean or larger!
 
