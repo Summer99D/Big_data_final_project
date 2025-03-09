@@ -8,3 +8,23 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+
+```{r}
+install.packages("googledrive")
+library(googledrive)
+```
+
+
+```{r}
+file_id <- "13UHRy_cf_5zsLKj1tgCHQFm8OwHfiQSe"
+
+# Download the CSV file
+drive_download(as_id(file_id), path = "playlist.csv", overwrite = TRUE)
+playlist_df<- read.csv("playlist.csv")
+```
+```{r}
+summary(playlist_df)
+```
+
+
