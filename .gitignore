@@ -1,3 +1,4 @@
 nano .gitignore
 *.log
 *.csv
+playlist.csv
