@@ -1,6 +1,5 @@
-nano .gitignore
 *.log
 *.csv
 playlist.csv
 sample_submission.csv
-
+.DS_Store
