@@ -16,6 +16,8 @@ library(googledrive)
 library(ggplot2)
 library(tidyverse)
 library(dplyr)
+library(jsonlite)
+library(purrr)
 ```
 
 
@@ -49,9 +51,28 @@ ggplot(playlist_df) +
   theme_minimal() +
   theme(axis.text.x = element_text(hjust = 1))
 ```
-there is a large number of variables where the number of samples is too small. we don't want that so we create a subset where number of samples is mean or larger!
+there is a large number of variables where the number of samples is too small. we don't want that so we create a subset where number of samples is mode or larger!
 
 ```{r}
+# Subset the dataset
+playlist_subset <- playlist_df %>%
+  filter(num_samples >= 50)
 
+# View the first few rows
+head(playlist_subset)
+```
+
+```{r}
+# Step 1: Convert 'tracks' column from a string to a list
+playlist_subset <- playlist_subset %>%
+  mutate(tracks = map(tracks, ~ fromJSON(.) %>% as_tibble()))
+
+# Step 2: Unnest the track details while keeping the playlist name
+expanded_df <- playlist_subset %>%
+  select(name, tracks) %>%      # Keep playlist name and tracks column
+  unnest(tracks)                # Expand song details into separate rows
+
+# View the result
+head(expanded_df)
 ```
 
