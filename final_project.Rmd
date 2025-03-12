@@ -63,16 +63,44 @@ head(playlist_subset)
 ```
 
 ```{r}
-# Step 1: Convert 'tracks' column from a string to a list
-playlist_subset <- playlist_subset %>%
-  mutate(tracks = map(tracks, ~ fromJSON(.) %>% as_tibble()))
+# Function to clean and fix JSON format by replacing single quotes with double quotes
+clean_json <- function(json_text) {
+  # Replace single quotes with double quotes to make the JSON valid
+  json_text <- gsub("'", '"', json_text)
+  
+  # Optionally escape any problematic characters if needed
+  json_text <- gsub('(?<!\\\\)"', '\\"', json_text, perl = TRUE)
+  
+  return(json_text)
+}
 
-# Step 2: Unnest the track details while keeping the playlist name
-expanded_df <- playlist_subset %>%
-  select(name, tracks) %>%      # Keep playlist name and tracks column
-  unnest(tracks)                # Expand song details into separate rows
+# Apply the cleaning function and parse the JSON
+playlist_subset_fixed <- playlist_subset
+playlist_subset_fixed$tracks <- lapply(playlist_subset_fixed$tracks, clean_json)  # Clean the JSON format
 
-# View the result
-head(expanded_df)
+# Function to parse the cleaned JSON manually without external libraries
+parse_json <- function(json_text) {
+  # Attempt to parse the JSON text
+  parsed <- tryCatch({
+    json_data <- jsonlite::fromJSON(json_text)
+    as.data.frame(json_data)
+  }, error = function(e) {
+    message("Error parsing JSON: ", e$message)
+    return(NULL)
+  })
+  
+  return(parsed)
+}
+
+# Apply the JSON parsing function and clean up the list
+playlist_subset_fixed$tracks <- lapply(playlist_subset_fixed$tracks, parse_json)
+
+# Flatten the list of tracks and filter out "Frank's Track"
+playlist_subset_fixed <- do.call(rbind, playlist_subset_fixed$tracks)
+playlist_subset_fixed <- playlist_subset_fixed[playlist_subset_fixed$track_name != "Frank\"s Track", ]
+
+# Inspect the result
+head(playlist_subset_fixed)q
+
 ```
 
