@@ -1,0 +1,57 @@
+---
+title: "Big Data Final project"
+author: "Summer Negahdar"
+date: "2025-03-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r}
+install.packages("googledrive")
+library(googledrive)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+```
+
+
+```{r}
+file_id <- "13UHRy_cf_5zsLKj1tgCHQFm8OwHfiQSe"
+
+# Download the CSV file
+drive_download(as_id(file_id), path = "playlist.csv", overwrite = TRUE)
+playlist_df<- read.csv("playlist.csv")
+
+##uploading spotify songs dataset
+song_df<- read_csv('spotify_songs.csv')
+```
+
+```{r}
+### playlist df
+##just looking at statistical
+summary(playlist_df)
+#looking at columns
+colnames(playlist_df)
+```
+
+```{r}
+##creating a boxplot of num_tracks column to see how many tracks are there in average
+# Create a boxplot
+# Create the boxplot
+ggplot(playlist_df) +
+  geom_boxplot(aes(x = "number of samples", y = num_samples), width = 0.2) +
+  geom_boxplot(aes(x = "number of tracks", y = num_tracks), width = 0.2) +
+  labs(title = "Boxplots of num_samples and num_tracks", x = "Category", y = "Values") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(hjust = 1))
+```
+there is a large number of variables where the number of samples is too small. we don't want that so we create a subset where number of samples is mean or larger!
+
+```{r}
+
+```
+

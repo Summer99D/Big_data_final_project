@@ -1,6 +1,12 @@
+# Your local gitignore content
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 
-nano .gitignore
+# Remote gitignore content
+*.log
+*.csv
+playlist.csv
+sample_submission.csv
+.DS_Store
