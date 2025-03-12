@@ -3,3 +3,6 @@
 playlist.csv
 sample_submission.csv
 .DS_Store
+.RData
+.Rhistory
+.Rproj.user/
