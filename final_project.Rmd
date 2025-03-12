@@ -32,7 +32,6 @@ playlist_df<- read.csv("playlist.csv")
 song_df<- read_csv('spotify_songs.csv')
 ```
 
-
 ```{r}
 ### playlist df
 ##just looking at statistical
