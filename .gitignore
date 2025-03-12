@@ -1,3 +1,10 @@
+# Your local gitignore content
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Remote gitignore content
 *.log
 *.csv
 playlist.csv
