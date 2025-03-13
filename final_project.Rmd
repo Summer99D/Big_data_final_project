@@ -111,14 +111,59 @@ playlist_subset_fixed <- playlist_subset_fixed %>%
 head(playlist_subset_fixed$track_id)
 ```
 ```{r}
-# I want to see how many tracks from playlists exist in songs df
-# Find the common track_ids between playlist_subset_fixed and playlist_df
-common_track_ids <- intersect(playlist_subset_fixed$track_id, playlist_df$track_id)
+# Get unique track names from playlist_subset_fixed
+playlist_track_names <- unique(playlist_subset_fixed$track_name)
 
-# Count how many common track_ids exist
-num_common_track_ids <- length(common_track_ids)
+# Get unique track names from song_df
+song_df_track_names <- unique(song_df$track_name)
 
-# Print the result
-print(num_common_track_ids)
+# Find matching track names
+matching_track_names <- playlist_track_names[playlist_track_names %in% song_df_track_names]
+num_matches <- length(matching_track_names)
+
+# Total number of unique track names in each dataset
+total_playlist_track_names <- length(playlist_track_names)
+total_song_df_track_names <- length(song_df_track_names)
+
+# Print the results
+cat("Number of unique track names in playlist_subset_fixed:", total_playlist_track_names, "\n")
+cat("Number of unique track names in song_df:", total_song_df_track_names, "\n")
+cat("Number of track names from playlist_subset_fixed that match song_df:", num_matches, "\n")
+cat("Percentage of playlist_subset_fixed track names found in song_df:", 
+    round(num_matches / total_playlist_track_names * 100, 2), "%\n")
+##we have 2015 songs whose data we can find in songs-df
 ```
+```{r}
+# Get unique track IDs from playlist_subset_fixed and playlist_df
+playlist_subset_fixed_track_ids <- unique(playlist_subset_fixed$track_id)
+playlist_df_track_ids <- unique(song_df$track_id)
 
+# Find matching track IDs
+matching_track_ids <- playlist_subset_fixed_track_ids[playlist_subset_fixed_track_ids %in% playlist_df_track_ids]
+num_matches_ids <- length(matching_track_ids)
+
+# Total number of unique track IDs in each dataset
+total_playlist_subset_fixed_track_ids <- length(playlist_subset_fixed_track_ids)
+total_playlist_df_track_ids <- length(playlist_df_track_ids)
+
+# Print the results
+cat("Number of unique track IDs in playlist_subset_fixed:", total_playlist_subset_fixed_track_ids, "\n")
+cat("Number of unique track IDs in song_df:", total_playlist_df_track_ids, "\n")
+cat("Number of track IDs from playlist_subset_fixed that match song_df:", num_matches_ids, "\n")
+cat("Percentage of playlist_subset_fixed track IDs found in song_df:", 
+    round(num_matches_ids / total_playlist_subset_fixed_track_ids * 100, 2), "%\n")
+
+# Optionally, display the matching track IDs
+if (num_matches_ids > 0) {
+  cat("Matching track IDs:\n", paste(matching_track_ids, collapse = "\n"), "\n")
+} else {
+  cat("No matching track IDs found.\n")
+}
+
+# Find matching track names from the matching track IDs
+matching_track_names_by_id <- playlist_subset_fixed$track_name[playlist_subset_fixed$track_id %in% matching_track_ids]
+
+```
+## Conclusion
+
+there are songs that have similar name but IDs ar different! we will focus on IDs then!
