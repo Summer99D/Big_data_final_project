@@ -29,7 +29,8 @@ drive_download(as_id(file_id), path = "playlist.csv", overwrite = TRUE)
 playlist_df<- read.csv("playlist.csv")
 
 ##uploading spotify songs dataset
-song_df<- read_csv('spotify_songs.csv')
+song_df<- read_csv("/Users/samarnegahdar/Documents/school/Winter 2025/Big_data_final_project/raw_songs.csv")
+streaming_df<- read.csv("/Users/samarnegahdar/Documents/school/Winter 2025/Big_data_final_project/music_streaming.csv")
 ```
 
 ```{r}
@@ -38,6 +39,7 @@ song_df<- read_csv('spotify_songs.csv')
 summary(playlist_df)
 #looking at columns
 colnames(playlist_df)
+colnames(streaming_df)
 ```
 
 ```{r}
@@ -110,33 +112,11 @@ playlist_subset_fixed <- playlist_subset_fixed %>%
   select(-track_uri)  # Remove the original track_uri column
 head(playlist_subset_fixed$track_id)
 ```
-```{r}
-# Get unique track names from playlist_subset_fixed
-playlist_track_names <- unique(playlist_subset_fixed$track_name)
 
-# Get unique track names from song_df
-song_df_track_names <- unique(song_df$track_name)
-
-# Find matching track names
-matching_track_names <- playlist_track_names[playlist_track_names %in% song_df_track_names]
-num_matches <- length(matching_track_names)
-
-# Total number of unique track names in each dataset
-total_playlist_track_names <- length(playlist_track_names)
-total_song_df_track_names <- length(song_df_track_names)
-
-# Print the results
-cat("Number of unique track names in playlist_subset_fixed:", total_playlist_track_names, "\n")
-cat("Number of unique track names in song_df:", total_song_df_track_names, "\n")
-cat("Number of track names from playlist_subset_fixed that match song_df:", num_matches, "\n")
-cat("Percentage of playlist_subset_fixed track names found in song_df:", 
-    round(num_matches / total_playlist_track_names * 100, 2), "%\n")
-##we have 2015 songs whose data we can find in songs-df
-```
 ```{r}
 # Get unique track IDs from playlist_subset_fixed and playlist_df
 playlist_subset_fixed_track_ids <- unique(playlist_subset_fixed$track_id)
-playlist_df_track_ids <- unique(song_df$track_id)
+playlist_df_track_ids <- unique(song_df$id)
 
 # Find matching track IDs
 matching_track_ids <- playlist_subset_fixed_track_ids[playlist_subset_fixed_track_ids %in% playlist_df_track_ids]
@@ -155,15 +135,11 @@ cat("Percentage of playlist_subset_fixed track IDs found in song_df:",
 
 # Optionally, display the matching track IDs
 if (num_matches_ids > 0) {
-  cat("Matching track IDs:\n", paste(matching_track_ids, collapse = "\n"), "\n")
+  cat("there are matching track IDs in two datasets")
 } else {
   cat("No matching track IDs found.\n")
 }
 
-# Find matching track names from the matching track IDs
-matching_track_names_by_id <- playlist_subset_fixed$track_name[playlist_subset_fixed$track_id %in% matching_track_ids]
-
 ```
-## Conclusion
 
-there are songs that have similar name but IDs ar different! we will focus on IDs then!
+
