@@ -56,7 +56,7 @@ there is a large number of variables where the number of samples is too small. w
 ```{r}
 # Subset the dataset
 playlist_subset <- playlist_df %>%
-  filter(num_samples >= 50)
+  filter(num_samples >= 10)
 
 # View the first few rows
 head(playlist_subset)
@@ -109,5 +109,16 @@ playlist_subset_fixed <- playlist_subset_fixed %>%
   mutate(track_id = sub("spotify:track:", "", track_uri)) %>%
   select(-track_uri)  # Remove the original track_uri column
 head(playlist_subset_fixed$track_id)
+```
+```{r}
+# I want to see how many tracks from playlists exist in songs df
+# Find the common track_ids between playlist_subset_fixed and playlist_df
+common_track_ids <- intersect(playlist_subset_fixed$track_id, playlist_df$track_id)
+
+# Count how many common track_ids exist
+num_common_track_ids <- length(common_track_ids)
+
+# Print the result
+print(num_common_track_ids)
 ```
 
