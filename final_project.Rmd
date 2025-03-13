@@ -100,7 +100,14 @@ playlist_subset_fixed <- do.call(rbind, playlist_subset_fixed$tracks)
 playlist_subset_fixed <- playlist_subset_fixed[playlist_subset_fixed$track_name != "Frank\"s Track", ]
 
 # Inspect the result
-head(playlist_subset_fixed)q
-
+head(playlist_subset_fixed)
+```
+```{r}
+## i will be extracting track ids from track_uri column so I can merge it with songs_df
+# Replace track_uri with track_id by extracting the ID
+playlist_subset_fixed <- playlist_subset_fixed %>%
+  mutate(track_id = sub("spotify:track:", "", track_uri)) %>%
+  select(-track_uri)  # Remove the original track_uri column
+head(playlist_subset_fixed$track_id)
 ```
 
