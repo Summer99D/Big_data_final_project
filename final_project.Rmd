@@ -20,5 +20,27 @@ library(jsonlite)
 library(purrr)
 ```
 
+```{r}
+file_id <- "1alb6LKe-innr2DMUTSCEv4x50vvyp2js"
 
+
+csv_path <- tempfile(fileext = ".csv")
+drive_download(as_id(file_id), path = csv_path, overwrite = TRUE)
+
+# Read the CSV into R
+covid_df <- read_csv(csv_path)
+
+##inspecting the dataset
+head(covid_df)
+```
+
+```{r}
+set.seed(42)
+train_idx <- sample(1:nrow(covid_df), 0.8 * nrow(covid_df))
+train_data <- covid_df[train_idx, ]
+test_data <- covid_df[-train_idx, ]
+##checking the size
+dim(train_data)
+dim(test_data)
+```
 
