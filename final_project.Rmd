@@ -26,16 +26,47 @@ file_id <- "1alb6LKe-innr2DMUTSCEv4x50vvyp2js"
 
 csv_path <- tempfile(fileext = ".csv")
 drive_download(as_id(file_id), path = csv_path, overwrite = TRUE)
+```
 
-# Read the CSV into R
+```{r}
+# reading the CSV file
 covid_df <- read_csv(csv_path)
+##subsetting the dataset
+covid_df <- covid_df %>%
+  select(
+    casespc, deathspc, intersects_msa,
+    cur_smoke_q1, cur_smoke_q2, cur_smoke_q3, cur_smoke_q4,
+    bmi_obese_q1, bmi_obese_q2, bmi_obese_q3, bmi_obese_q4,
+    exercise_any_q1, exercise_any_q2, exercise_any_q3, exercise_any_q4,
+    brfss_mia, puninsured2010, reimb_penroll_adj10, mort_30day_hosp_z,
+    adjmortmeas_amiall30day, adjmortmeas_chfall30day, med_prev_qual_z,
+    primcarevis_10, diab_hemotest_10, diab_eyeexam_10, diab_lipids_10,
+    mammogram_10, cs00_seg_inc, cs00_seg_inc_pov25, cs00_seg_inc_aff75,
+    cs_race_theil_2000, gini99, poor_share, inc_share_1perc,
+    frac_middleclass, scap_ski90pcm, rel_tot, cs_frac_black,
+    cs_frac_hisp, unemp_rate, cs_labforce, cs_elf_ind_man,
+    cs_born_foreign, mig_inflow, mig_outflow, pop_density,
+    frac_traveltime_lt15, hhinc00, median_house_value, ccd_exp_tot,
+    score_r, cs_fam_wkidsinglemom, subcty_exp_pc, taxrate,
+    tax_st_diff_top20, pm25, pm25_mia, summer_tmmx, summer_rmax,
+    winter_tmmx, winter_rmax, bmcruderate, county, state
+  )
 
+# Checking the total NA count to see what we should do with it!
+na_counts <- colSums(is.na(covid_df))
+print(na_counts)
+```
+
+```{r}
+# Drop rows with any NA values (since there arent many of them)
+covid_df <- covid_df %>%
+  drop_na()
 ##inspecting the dataset
 head(covid_df)
 ```
 
 ```{r}
-set.seed(42)
+set.seed(25)
 train_idx <- sample(1:nrow(covid_df), 0.8 * nrow(covid_df))
 train_data <- covid_df[train_idx, ]
 test_data <- covid_df[-train_idx, ]
