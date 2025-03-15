@@ -1,0 +1,243 @@
+---
+title: "final_project_data"
+output: pdf_document
+date: "2025-03-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(glmnet)
+library(ggcorrplot)
+library(readxl)
+library(caret)
+
+
+```
+
+
+```{r}
+setwd("/Users/yangyuchen/Desktop/HarrisWinter2025/Big Data/Final")
+covid <- read.csv("Data-Covid002.csv")
+str(covid)
+# NA values 
+colSums(is.na(covid))
+
+```
+
+```{r}
+# Load dataset
+file_path <- "Data-Covid002.csv"
+data <- read.csv(file_path, stringsAsFactors = FALSE)
+
+# Load variable description file
+var_desc_path <- "PPHA_30545_MP03-Variable_Description.xlsx"
+var_desc <- read_excel(var_desc_path)
+
+# Select relevant variables
+relevant_vars <- var_desc %>%
+  filter(Source %in% c("Opportunity Insights", "PM COVID")) %>%
+  pull(Variable)
+
+# Include county, state, and deathspc
+relevant_vars <- c(relevant_vars, "county", "state", "deathspc")
+
+# Filter dataset
+data_filtered <- data %>% select(all_of(relevant_vars))
+
+# Summary statistics
+summary_stats <- summary(data_filtered)
+print(summary_stats)
+
+# Drop rows with missing values
+data_cleaned <- na.omit(data_filtered)
+str(data_cleaned)
+```
+
+
+```{r}
+# data prep 
+df_numeric <- data_cleaned %>% select(where(is.numeric))
+
+# CORRELATION ANALYSIS 
+# Compute the correlation matrix
+cor_matrix <- cor(df_numeric, use = "pairwise.complete.obs")  # Use pairwise method to handle NAs
+
+# View Heatmap 
+print(cor_matrix)
+ggcorrplot(cor_matrix)
+
+# Extract upper triangle of correlation matrix (excluding diagonal)
+upper_tri <- cor_matrix[upper.tri(cor_matrix)]
+
+# Compute the average absolute correlation
+avg_cor <- mean(abs(upper_tri), na.rm = TRUE)
+
+# Print the result
+cat("Average Absolute Correlation:", round(avg_cor, 3), "\n")
+```
+
+```{r}
+cor_df <- as.data.frame(as.table(cor_matrix)) %>%
+  filter(Var1 != Var2) %>%
+  arrange(desc(abs(Freq)))  # Sort by absolute correlation
+head(cor_df, 20)  # Show top 10 highest correlations
+
+# not seeing super strong correlations between covariates
+```
+
+```{r}
+# PCA ANALYSIS 
+pca_result <- prcomp(df_numeric, scale = TRUE)
+plot(pca_result, type = "lines", main = "Scree Plot of COVID Deathspc")
+
+```
+```{r}
+# print PCA significance 
+print(summary(pca_result))
+```
+
+```{r}
+# Loadings (which variables contribute most to each PC)
+loadings <- pca_result$rotation
+print(loadings[, 1:5])  # Show top 5 PCs
+```
+```{r}
+library(factoextra)
+fviz_pca_var(pca_result, col.var = "contrib", repel = TRUE) 
+```
+
+```{r}
+# PRINCIPLE COMPONENT REGRESSION 
+
+# Convert PCA scores to dataframe
+pc_scores <- as.data.frame(pca_result$x)
+
+# Add back the dependent variable (COVID deaths per capita)
+df_pcr <- cbind(deathspc = df_numeric$deathspc, pc_scores)
+
+# View first few rows
+head(df_pcr)
+```
+
+```{r}
+set.seed(421)  # reproducibility
+
+# 80% training, 20% testing
+trainIndex <- createDataPartition(df_pcr$deathspc, p = 0.8, list = FALSE)
+train_data <- df_pcr[trainIndex, ]
+test_data <- df_pcr[-trainIndex, ]
+```
+
+```{r}
+# Store AIC values for different numbers of PCs
+aic_values <- numeric(10)  # Store AIC for first 10 PCs
+
+for (k in 1:10) {
+  formula <- as.formula(paste("deathspc ~", paste0("PC", 1:k, collapse = "+")))
+  lm_model <- lm(formula, data = train_data)
+  aic_values[k] <- AIC(lm_model)
+}
+
+# Find best number of PCs (lowest AIC)
+best_k <- which.min(aic_values)
+cat("\nBest number of PCs by AIC:", best_k, "\n")
+```
+
+```{r}
+# Fit OLS using the best number of PCs from AIC selection
+formula_best <- as.formula(paste("deathspc ~", paste0("PC", 1:best_k, collapse = "+")))
+pcr_model <- lm(formula_best, data = train_data)
+
+# Print model summary
+summary(pcr_model)
+
+```
+
+```{r}
+# Make predictions on the test set
+pcr_predictions <- predict(pcr_model, newdata = test_data)
+
+# Compute RMSE (Root Mean Squared Error)
+rmse <- sqrt(mean((pcr_predictions - test_data$deathspc)^2))
+cat("RMSE of PCR Model:", rmse)
+
+```
+
+```{r}
+# compare this result with Lasso and ridge on original covariates 
+# Convert PCA-transformed data to matrix (excluding response variable)
+x_pca_train <- as.matrix(train_data[, -1])  # PCA scores as predictors
+y_train <- train_data$deathspc
+
+# Ridge on PCA scores
+cv_ridge_pca <- cv.glmnet(x_pca_train, y_train, alpha = 0)
+ridge_lambda_pca <- cv_ridge_pca$lambda.min
+cat("pca ridge lambda :", ridge_lambda_pca, "\n")
+plot(cv_ridge_pca, main = "PCA Ridge Curve")
+
+
+# Lasso on PCA scores
+cv_lasso_pca <- cv.glmnet(x_pca_train, y_train, alpha = 1)
+lasso_lambda_pca <- cv_lasso_pca$lambda.min
+cat("pca lasso lambda :", lasso_lambda_pca, "\n")
+plot(cv_lasso_pca, main = "PCA Lasso Curve")
+
+```
+
+```{r}
+# TEST FOR NONLINEARITY 
+# DECISION TREE REGRESSOR 
+library(rpart)
+library(rpart.plot)
+
+# Train a Decision Tree
+tree_model <- rpart(deathspc ~ ., data = train_data, method = "anova")
+
+# Plot the tree
+rpart.plot(tree_model, type = 2, extra = 101, tweak = 1.2)
+
+# Get feature importance
+tree_importance <- tree_model$variable.importance
+print(tree_importance)  # Print importance scores
+
+```
+
+```{r}
+# RANDOM FOREST 
+library(randomForest)
+
+set.seed(42)  # Ensure reproducibility
+
+# Train a Random Forest model
+rf_model <- randomForest(deathspc ~ ., data = train_data, ntree = 500, importance = TRUE)
+
+# View feature importance
+importance(rf_model)
+varImpPlot(rf_model)  
+
+# Get importance scores
+importance_scores <- importance(rf_model)
+
+# Print importance scores
+print(importance_scores)
+
+```
+
+```{r}
+# Tune Random Forest
+tuned_rf <- randomForest(deathspc ~ ., data = train_data, ntree = 1000, mtry = 5, nodesize = 5)
+
+# Predict on test set
+rf_predictions <- predict(tuned_rf, newdata = test_data)
+
+# Compute RMSE
+rf_rmse <- sqrt(mean((rf_predictions - test_data$deathspc)^2))
+cat("Random Forest RMSE:", rf_rmse, "\n")
+
+```
+
+
+
+
