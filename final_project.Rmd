@@ -66,7 +66,7 @@ head(covid_df)
 ```
 
 ```{r}
-set.seed(25)
+set.seed(42git)
 train_idx <- sample(1:nrow(covid_df), 0.8 * nrow(covid_df))
 train_data <- covid_df[train_idx, ]
 test_data <- covid_df[-train_idx, ]

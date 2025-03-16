@@ -20,16 +20,18 @@ library(dplyr)
 library(readxl)
 library(xtable)
 library(tidyverse)  # Includes dplyr and other essential packages
+library(rpart)
+library(rpart.plot)
+library(randomForest)
 
-
-setwd('/Users/ishangupta/Desktop/Books for Masters/R Practice/Big Data/Final')
+setwd("/Users/samarnegahdar/Documents/school/Winter 2025/Big_data_final_project")
 
 
 # Read in dataset
 data <- read.csv("Data-Covid002.csv", stringsAsFactors = FALSE)
 
 # Load variable descriptions
-var_desc <- read_excel("PPHA_30545_MP03-Variable_Description.xlsx")
+var_desc <- read_excel("data_dict.xlsx")
 
 # Select relevant variables
 relevant_vars <- var_desc %>%
@@ -172,3 +174,250 @@ print(xtable(results_df), type="latex", file="Significant_Predictors.tex")
 
 
 ```
+
+```{r}
+# data prep
+df_numeric <- data_cleaned %>% select(where(is.numeric))
+# CORRELATION ANALYSIS
+# Compute the correlation matrix
+cor_matrix <- cor(df_numeric, use = "pairwise.complete.obs") # View Heatmap
+print(cor_matrix)
+```
+
+
+```{r}
+# Extract upper triangle of correlation matrix (excluding diagonal)
+upper_tri <- cor_matrix[upper.tri(cor_matrix)]
+# Compute the average absolute correlation
+avg_cor <- mean(abs(upper_tri), na.rm = TRUE)
+# Print the result
+cat("Average Absolute Correlation:", round(avg_cor, 3), "\n")
+```
+
+```{r}
+cor_df <- as.data.frame(as.table(cor_matrix)) %>%
+filter(Var1 != Var2) %>%
+arrange(desc(abs(Freq))) # Sort by absolute correlation
+head(cor_df, 20) # Show top 10 highest correlations
+```
+
+# not seeing super strong correlations between covariates
+```{r}
+# PCA ANALYSIS
+pca_result <- prcomp(df_numeric, scale = TRUE)
+plot(pca_result, type = "lines", main = "Scree Plot of COVID Deathspc")
+```
+```{r}
+# print PCA significance
+print(summary(pca_result))
+```
+```{r}
+fviz_pca_var(pca_result, col.var = "contrib", repel = TRUE, labelsize = 2) 
+```
+
+# PRINCIPLE COMPONENT REGRESSION
+```{r}
+# Convert PCA scores to dataframe
+pc_scores <- as.data.frame(pca_result$x)
+# Add back the dependent variable (COVID deaths per capita)
+df_pcr <- cbind(deathspc = df_numeric$deathspc, pc_scores)
+# View first few rows
+head(df_pcr)
+```
+```{r}
+set.seed(421) 
+# 80% training, 20% testing
+trainIndex <- createDataPartition(df_pcr$deathspc, p = 0.8, list = FALSE)
+train_data <- df_pcr[trainIndex, ]
+test_data <- df_pcr[-trainIndex, ]
+# Store AIC values for different numbers of PCs
+aic_values <- numeric(10) # Store AIC for first 10 PCs
+for (k in 1:10) {
+formula <- as.formula(paste("deathspc ~", paste0("PC", 1:k, collapse = "+")))
+lm_model <- lm(formula, data = train_data)
+aic_values[k] <- AIC(lm_model)
+}
+# Find best number of PCs (lowest AIC)
+best_k <- which.min(aic_values)
+cat("\nBest number of PCs by AIC:", best_k, "\n")
+##
+## Best number of PCs by AIC: 10
+# Fit OLS using the best number of PCs from AIC selection
+formula_best <- as.formula(paste("deathspc ~", paste0("PC", 1:best_k, collapse = "+")))
+pcr_model <- lm(formula_best, data = train_data)
+# Print model summary
+summary(pcr_model)
+```
+```{r}
+# Make predictions on the test set
+pcr_predictions <- predict(pcr_model, newdata = test_data)
+# Compute RMSE (Root Mean Squared Error)
+rmse <- sqrt(mean((pcr_predictions - test_data$deathspc)^2))
+cat("RMSE of PCR Model:", rmse)
+## RMSE of PCR Model: 38.78843
+# compare this result with Lasso and ridge on original covariates
+# Convert PCA-transformed data to matrix (excluding response variable)
+x_pca_train <- as.matrix(train_data[, -1]) # PCA scores as predictors
+y_train <- train_data$deathspc
+# Ridge on PCA scores
+cv_ridge_pca <- cv.glmnet(x_pca_train, y_train, alpha = 0)
+ridge_lambda_pca <- cv_ridge_pca$lambda.min
+cat("pca ridge lambda :", ridge_lambda_pca, "\n")
+```
+
+```{r}
+plot(cv_ridge_pca, main = "PCA Ridge Curve")
+```
+```{r}
+# Lasso on PCA scores
+cv_lasso_pca <- cv.glmnet(x_pca_train, y_train, alpha = 1)
+lasso_lambda_pca <- cv_lasso_pca$lambda.min
+cat("PCA lasso lambda :", lasso_lambda_pca, "\n")
+```
+
+```{r}
+plot(cv_lasso_pca, main = "PCA Lasso Curve")
+```
+
+```{r}
+# Remove non-numeric columns before clustering
+numeric_data <- data_cleaned %>%
+  select(-c(county, state))  # Exclude categorical variables
+numeric_data <- numeric_data %>%
+  mutate(across(everything(), as.numeric))
+# Normalize the data (scale to mean 0, variance 1)
+numeric_scaled <- scale(numeric_data)
+
+# Determine the optimal number of clusters using the Elbow Method
+fviz_nbclust(numeric_scaled, kmeans, method = "wss") +
+  labs(title = "Elbow Method for Optimal Clusters")
+ggsave("Elbow_Method.png", width = 8, height = 6, dpi = 300)
+
+set.seed(42)
+kmeans_result <- kmeans(numeric_scaled, centers = 3, nstart = 10)
+data_cleaned$cluster <- as.factor(kmeans_result$cluster)
+# Calculate mean values for each cluster
+cluster_summary <- data_cleaned %>%
+  group_by(cluster) %>%
+  summarise(
+    mean_deathspc = mean(deathspc, na.rm = TRUE),
+    mean_poor_share = mean(poor_share, na.rm = TRUE)
+  )
+
+# Print the summary to console for reference
+print(cluster_summary)
+
+# Optionally, save the summary to a CSV file for record-keeping
+write.csv(cluster_summary, "cluster_summary.csv", row.names = FALSE)
+```
+
+```{r}
+# Household Income vs. COVID-19 Deaths per Capita
+plot1 <- ggplot(data_cleaned, aes(x = hhinc00, y = deathspc, color = cluster)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("red", "blue", "green")) +
+  labs(title = "Economic Impact on COVID-19 Mortality", 
+       x = "Household Income ($)", y = "Deaths per Capita", color = "Cluster") +
+  theme_minimal()
+
+print(plot1)  # Print plot
+ggsave("Income_vs_DeathRate.png", plot = plot1, width = 8, height = 6, dpi = 300) 
+```
+
+
+Interpretation of Economic Impact on COVID-19 Mortality Clustering:
+This scatter plot represents the relationship between household income and COVID-19 deaths per capita, with data points grouped into three clusters using K-Means clustering. The X-axis represents household income, while the Y-axis represents COVID-19 deaths per capita. The different colors denote clusters:
+Cluster 1 (Red): Counties with high mortality rates, widely distributed across different income levels.
+Cluster 2 (Blue): Counties with moderate mortality rates, concentrated mostly in lower-to-middle-income ranges.
+Cluster 3 (Green): Counties with lower mortality rates, primarily located in middle-income groups.
+Key Insights:
+1. Higher-income does not always mean lower mortality: Unlike the previous plot, Cluster 1 (Red, high mortality) includes many counties in the higher-income bracket ($40,000 - $70,000). This suggests that factors beyond income, such as healthcare access, comorbidities, and regional pandemic policies, are influencing mortality rates.
+2. Lower-income counties still show significant mortality risks: Cluster 2 (Blue) contains many low-to-middle-income counties ($15,000 - $40,000) with moderate death rates, reinforcing that economic disadvantage contributes to COVID-19 severity but is not the sole determinant.
+3. Counties in Cluster 3 (Green, low mortality) are mostly concentrated at the lower range of deaths per capita: These counties are spread across different income levels but tend to have better overall health outcomes, possibly due to lower population density, stronger healthcare infrastructure, or better public health policies.
+Policy Recommendations Based on K-Means Clustering:
+1.Target high-mortality counties (Cluster 1) for urgent interventions, regardless of income level. These counties need enhanced healthcare infrastructure, expanded vaccine access, and better preparedness for future pandemics.
+2. Investigate additional risk factors influencing high-income counties with high mortality. Since some wealthier counties still suffer high death rates, factors such as prevalence of pre-existing conditions (obesity, diabetes), urbanization, and healthcare system efficiency should be further analyzed.
+3. Provide financial and healthcare support for low-income counties in Cluster 2 (Blue). These counties are at a moderate risk and could benefit from economic assistance, public health awareness programs, and increased medical resource allocation.
+
+```{r}
+unique(data_cleaned$bmi_obese_q1)
+sum(data_cleaned$bmi_obese_q1 == 0)
+data_cleaned %>%
+  filter(bmi_obese_q1 == 0) %>%
+  select(county, state, bmi_obese_q1, deathspc) %>%
+  print()
+sum(is.na(data$bmi_obese_q1))
+
+selected_features <- c("bmi_obese_q1", "deathspc")
+df_cluster <- data_cleaned %>%
+  select(all_of(selected_features)) %>%
+  na.omit()
+df_cluster$cluster <- as.factor(kmeans_result$cluster)
+df_cluster$cluster <- as.factor(kmeans_result$cluster)
+plot_obesity <- ggplot(df_cluster, aes(x = bmi_obese_q1, y = deathspc, color = cluster)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("red", "blue", "green")) +
+  labs(title = "Obesity Rate vs. COVID-19 Deaths", 
+       x = "Obesity Rate", y = "Deaths per Capita", color = "Cluster") +
+  theme_minimal()
+
+print(plot_obesity)
+ggsave("Obesity_vs_DeathRate.png", plot = plot_obesity, width = 8, height = 6, dpi = 300)
+```
+
+
+Interpretation of Obesity Rate vs. COVID-19 Mortality Clustering:
+This scatter plot visualizes the relationship between obesity rates and COVID-19 deaths per capita, with counties grouped into three clusters using K-Means clustering. The X-axis represents obesity rates, while the Y-axis represents COVID-19 deaths per capita. The different colors represent the clusters:
+Cluster 1 (Red): Counties with higher COVID-19 mortality, primarily falling within moderate obesity rates (~0.10 - 0.50).
+Cluster 2 (Blue): Counties with low mortality but concentrated at an obesity rate of 0.00. This suggests these counties either have missing or inaccurately reported obesity data.
+Cluster 3 (Green): Counties with lower mortality rates, spread across various obesity levels, including some with high obesity rates.
+
+Key Insights:
+1. Obesity is correlated with higher COVID-19 mortality, but not exclusively. Cluster 1 (Red, high-mortality counties) consists mostly of counties with moderate obesity rates (0.10 - 0.50). This supports medical research that obesity increases the risk of severe COVID-19 outcomes, but other factors like healthcare access, socio-economic conditions, and chronic illnesses may also be influencing mortality.
+2. Cluster 2 (Blue) counties with 0.00 obesity rates still exist but with low mortality. Despite replacing 0.00 values with NA and re-running the clustering, these counties still appear as a distinct group. This suggests that these counties may not have reported obesity data correctly or have exceptionally low obesity rates.
+3. Counties with high obesity rates (~0.50+) are mostly in Cluster 3 (Green) with lower mortality. Some high-obesity counties do not have high COVID-19 deaths, which could indicate better healthcare systems, stronger public health policies, or lower population density as protective factors.
+4. Some low-obesity counties still experience high mortality. A few Cluster 1 (Red) counties with obesity rates under 0.25 still have high deaths per capita. This suggests that other factors, such as diabetes prevalence, air pollution (PM2.5), or healthcare disparities, may contribute to high COVID-19 mortality.
+
+
+##Test for nonlinearity
+### Decision Tree regressor
+```{r}
+# Train a Decision Tree
+tree_model <- rpart(deathspc ~ ., data = train_data, method = "anova")
+# Plot the tree
+rpart.plot(tree_model, type = 2, extra = 101, tweak = 1.2)
+```
+```{r}
+# Get feature importance
+tree_importance <- tree_model$variable.importance
+print(tree_importance) # Print importance scores
+```
+##Random Forest
+```{r}
+set.seed(42)
+# Train a Random Forest model
+rf_model <- randomForest(deathspc ~ ., data = train_data, ntree = 500, importance = TRUE)
+# View feature importance
+importance(rf_model)
+```
+
+```{r}
+varImpPlot(rf_model, cex = 0.5)
+```
+
+```{r}
+# Get importance scores
+importance_scores <- importance(rf_model)
+# Print importance scores
+print(importance_scores)
+```
+```{r}
+# Tune Random Forest
+tuned_rf <- randomForest(deathspc ~ ., data = train_data, ntree = 1000, mtry = 5, nodesize = 5)
+# Predict on test set
+rf_predictions <- predict(tuned_rf, newdata = test_data)
+# Compute RMSE
+rf_rmse <- sqrt(mean((rf_predictions - test_data$deathspc)^2))
+cat("Random Forest RMSE:", rf_rmse, "\n")
+```
+
