@@ -2,6 +2,10 @@ From the cross-validation (CV) error vs. lambda plots, we can see that:
 
 The Ridge CV error initially decreases with λ, but starts increasing sharply beyond the optimal λ (~10.72). This suggests too much regularization degrades model performance.
 The Lasso CV error behaves similarly, reaching the lowest error around λ = 0.285 before increasing.
+Comparison: Ridge vs. Lasso
+Ridge Regression keeps all predictors but shrinks their coefficients.
+Lasso Regression eliminates some predictors (feature selection) by setting their coefficients to exactly zero.
+Both models perform best at a specific λ, beyond which they either over-regularize (causing underfitting) or under-regularize (causing overfitting).
 
 General Observations:
 Training MSE: Ridge Regression has a slightly lower MSE on the training set compared to Lasso, suggesting it fits
