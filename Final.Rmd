@@ -1,0 +1,174 @@
+---
+title: "Big Data Final"
+author: "Ishan Gupta"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load necessary libraries
+library(gamlr)
+library(Matrix)
+library(parallel)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(xtable)
+library(tidyverse)  # Includes dplyr and other essential packages
+
+
+setwd('/Users/ishangupta/Desktop/Books for Masters/R Practice/Big Data/Final')
+
+
+# Read in dataset
+data <- read.csv("Data-Covid002.csv", stringsAsFactors = FALSE)
+
+# Load variable descriptions
+var_desc <- read_excel("PPHA_30545_MP03-Variable_Description.xlsx")
+
+# Select relevant variables
+relevant_vars <- var_desc %>%
+  filter(Source %in% c("Opportunity Insights", "PM COVID")) %>%
+  pull(Variable)
+
+# Include county, state, and deathspc
+relevant_vars <- c(relevant_vars, "county", "state", "deathspc")
+
+# Filter dataset
+data_filtered <- data %>% select(all_of(relevant_vars))
+
+# Drop rows with missing values
+data_cleaned <- na.omit(data_filtered)
+
+write.csv(data_cleaned,"data_filtered.csv")
+
+
+# Function to calculate summary statistics
+summary_stats <- function(df) {
+  df %>%
+    summarise_all(list(
+      Mean = ~mean(.),
+      SD = ~sd(.),
+      Min = ~min(.),
+      Max = ~max(.)
+    )) %>%
+    pivot_longer(cols = everything(), names_to = c("Variable", ".value"), names_sep = "_")
+}
+
+# **Categorizing Variables into Meaningful Panels**
+# Define variable groups
+demographics <- c("cs_frac_black", "cs_born_foreign", "frac_middleclass", "mig_inflow", "mig_outflow", "pop_density")
+economic_indicators <- c("hhinc00", "median_house_value", "gini99", "inc_share_1perc", "poor_share", "taxrate")
+health_factors <- c("bmi_obese_q1", "cur_smoke_q3", "diab_hemotest_10", "exercise_any_q1", "exercise_any_q2", "exercise_any_q3")
+healthcare_access <- c("reimb_penroll_adj10", "brfss_mia", "adjmortmeas_chfall30day", "mort_30day_hosp_z", "med_prev_qual_z")
+urbanization <- c("intersects_msa", "frac_traveltime_lt15", "cs_labforce", "cs_elf_ind_man")
+
+# Compute summary statistics for each panel
+demographics_stats <- summary_stats(data_filtered %>% select(all_of(demographics)))
+economic_stats <- summary_stats(data_filtered %>% select(all_of(economic_indicators)))
+health_stats <- summary_stats(data_filtered %>% select(all_of(health_factors)))
+healthcare_stats <- summary_stats(data_filtered %>% select(all_of(healthcare_access)))
+urbanization_stats <- summary_stats(data_filtered %>% select(all_of(urbanization)))
+
+# Add panel names
+demographics_stats$Panel <- "Demographics"
+economic_stats$Panel <- "Economic Indicators"
+health_stats$Panel <- "Health Factors"
+healthcare_stats$Panel <- "Healthcare Access"
+urbanization_stats$Panel <- "Urbanization & Labor"
+
+# Combine all panels
+all_stats <- bind_rows(demographics_stats, economic_stats, health_stats, healthcare_stats, urbanization_stats)
+
+# Reorder columns
+all_stats <- all_stats %>% select(Panel, Variable, Mean, SD, Min, Max)
+
+
+# Function to run univariate regressions and extract p-values
+margreg <- function(var_name, data) { 
+  predictor <- data[[var_name]]
+  fit <- lm(deaths ~ predictor, data = data) 
+  sf <- summary(fit) 
+  return(sf$coef[2,4])  # Extract the p-value
+}
+
+# Isolating the outcome variable
+deaths <- data_cleaned$deathspc
+predictor_vars <- setdiff(names(data_cleaned), "deathspc")
+
+# Set up parallel computing
+cl <- makeCluster(detectCores())
+
+# ✅ Fix: Explicitly export function and required objects
+clusterExport(cl, varlist = c("deaths", "data_cleaned", "margreg", "predictor_vars"), envir = environment())
+
+# ✅ Fix: Use clusterEvalQ to ensure workers load dependencies
+clusterEvalQ(cl, library(stats))
+
+# Run univariate regressions in parallel
+mrgpvals <- unlist(parLapply(cl, predictor_vars, function(var) margreg(var, data_cleaned)))
+
+# Stop the cluster
+stopCluster(cl)
+
+# Assign names to p-values
+names(mrgpvals) <- predictor_vars
+
+# Save histogram of p-values
+png("p_values_histogram.png")
+hist(mrgpvals, main = "P-values Distribution", xlab = "p-values", breaks = 30, col="lightblue")
+dev.off()
+
+# Function to apply Benjamini-Hochberg FDR correction
+fdr_cut <- function(pvals, q, plotit=TRUE, save_path=NULL){
+  pvals <- pvals[!is.na(pvals)]
+  N <- length(pvals)
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[pvals <= (q * k / N)])
+
+  if (plotit) {
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], col = c("grey60", "red")[sig[o]], pch = 20, 
+         ylab = "p-values", xlab = "Ordered Tests", main = paste("FDR =", q))
+    lines(1:N, q * (1:N) / N, col = "blue")
+    
+    if (!is.null(save_path)) {
+      png(save_path)
+      plot(pvals[o], col = c("grey60", "red")[sig[o]], pch = 20, 
+           ylab = "p-values", xlab = "Ordered Tests", main = paste("FDR =", q))
+      lines(1:N, q * (1:N) / N, col = "blue")
+      dev.off()
+    }
+  }
+  return(alpha)
+}
+
+# Apply FDR correction and save plot
+cutoff <- fdr_cut(mrgpvals, 0.01, save_path="FDR_plot.png")
+
+# Identify significant predictors
+signif_predictors <- names(mrgpvals)[mrgpvals <= cutoff]
+
+# Create results table
+results_df <- data.frame(
+  Variable = signif_predictors,
+  P_Value = mrgpvals[signif_predictors]
+)
+
+# Merge with variable descriptions
+results_df <- merge(results_df, var_desc, by.x="Variable", by.y="Variable", all.x=TRUE)
+
+results_df <- results_df %>% 
+  select(-Count, -Source)
+
+# Save LaTeX table
+print(xtable(results_df), type="latex", file="Significant_Predictors.tex")
+
+
+```
