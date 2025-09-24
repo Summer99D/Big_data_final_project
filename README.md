@@ -1,4 +1,4 @@
-## TO future labs hiring team: 
+## T Future Labs' hiring team: 
 
 This is a final project for the Big data class at Booth school of business. throughout this group project we worked on seperate tasks to identify the underlying factors of COVID-19 in different US counties. 
 
