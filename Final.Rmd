@@ -1,6 +1,6 @@
 ---
 title: "Big Data Final"
-author: "Ishan Gupta"
+author: "Summer Negahdar"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
